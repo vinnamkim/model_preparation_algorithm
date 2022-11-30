@@ -1,0 +1,1 @@
+exclude mpa/modules/datasets/pipelines/transforms/cython_augments/*.c

@@ -1,9 +1,23 @@
+#cython: language_level=3
+
 # Copyright (C) 2022 Intel Corporation
 # SPDX-License-Identifier: Apache-2.0
 #
 
+import os
 import os.path as osp
-from setuptools import setup, find_packages
+from setuptools import setup, find_packages, Extension
+from Cython.Build import cythonize
+import numpy
+
+import Cython.Compiler.Options
+Cython.Compiler.Options.annotate = True
+
+cython_root = "cython_augments"
+ext_modules = [Extension("cython_augments.augment", [osp.join(
+    cython_root, "augment.pyx")], include_dirs=[numpy.get_include()], extra_compile_args=["-O3"])]
+ext_modules = cythonize(ext_modules)
+
 
 with open("README.md", "r") as fh:
     long_description = fh.read()
@@ -30,5 +44,6 @@ setup(
     packages=find_packages(include=('mpa', 'recipes', 'samples')),
     description='Model Preperation Algorithms',
     long_description=long_description,
+    ext_modules=ext_modules,
     install_requires=get_requirements()
 )
