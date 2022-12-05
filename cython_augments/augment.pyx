@@ -404,7 +404,7 @@ def brightness(image, factor):
 def sharpness(image, factor):
     cdef ImageInfo info
     cdef int x, y, i, j
-    cdef double c_factor
+    cdef float c_factor
     cdef float smooth_kernel[3][3]
     smooth_kernel[0][:] = [1 / 13., 1 / 13., 1 / 13.]
     smooth_kernel[1][:] = [1 / 13., 5 / 13., 1 / 13.]
@@ -414,19 +414,25 @@ def sharpness(image, factor):
     info = parse_img_info(image)
     c_factor = factor
 
+    for i in range(3):
+        for j in range(3):
+            smooth_kernel[i][j] = smooth_kernel[i][j] * (1 - c_factor)
+
+    smooth_kernel[1][1] += c_factor
+
     for y in range(1, info.height - 1):
         for x in range(1, info.width - 1):
             r = g = b = div = 0
 
-            for i in range(-1, 2):
-                for j in range(-1, 2):
-                    r += smooth_kernel[i + 1][j + 1] * info.img_ptr[y + i][x + j].r
-                    g += smooth_kernel[i + 1][j + 1] * info.img_ptr[y + i][x + j].g
-                    b += smooth_kernel[i + 1][j + 1] * info.img_ptr[y + i][x + j].b
+            for i in range(3):
+                for j in range(3):
+                    r += smooth_kernel[i][j] * info.img_ptr[y + i - 1][x + j - 1].r
+                    g += smooth_kernel[i][j] * info.img_ptr[y + i - 1][x + j - 1].g
+                    b += smooth_kernel[i][j] * info.img_ptr[y + i - 1][x + j - 1].b
 
-            info.img_ptr[y][x].r = clip(info.img_ptr[y][x].r * c_factor + r * (1 - c_factor))
-            info.img_ptr[y][x].g = clip(info.img_ptr[y][x].g * c_factor + g * (1 - c_factor))
-            info.img_ptr[y][x].b = clip(info.img_ptr[y][x].b * c_factor + b * (1 - c_factor))
+            info.img_ptr[y][x].r = clip(r)
+            info.img_ptr[y][x].g = clip(g)
+            info.img_ptr[y][x].b = clip(b)
 
     return image
 
