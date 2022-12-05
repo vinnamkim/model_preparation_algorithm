@@ -14,8 +14,12 @@ import Cython.Compiler.Options
 Cython.Compiler.Options.annotate = True
 
 cython_root = "cython_augments"
-ext_modules = [Extension("cython_augments.augment", [osp.join(
-    cython_root, "augment.pyx")], include_dirs=[numpy.get_include()], extra_compile_args=["-O3"])]
+ext_modules = [
+    Extension("cython_augments.augment", [osp.join(cython_root, "augment.pyx")],
+              include_dirs=[numpy.get_include()], extra_compile_args=["-O3"]),
+    Extension("cython_augments.cv_augment", [osp.join(cython_root, "cv_augment.pyx")],
+              include_dirs=[numpy.get_include()], extra_compile_args=["-O3"])
+]
 ext_modules = cythonize(ext_modules)
 
 

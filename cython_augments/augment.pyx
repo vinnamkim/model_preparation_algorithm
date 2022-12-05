@@ -1,10 +1,12 @@
-#cython: language_level=3
-# cython: profile=False
+# cython: language_level=3
+# distutils: define_macros=NPY_NO_DEPRECATED_API=NPY_1_7_API_VERSION
 
 import cython
 from cython.view cimport array as cvarray
 import numpy as np
 cimport numpy as np
+import cv2
+from PIL import Image
 np.import_array()
 
 
@@ -116,7 +118,8 @@ def autocontrast(image, cutoff=0, ignore=None, mask=None, preserve_tone=False):
 
     :return: An image.
     """
-
+    if image.mode != "RGB":
+        image = image.convert("RGB")
     cdef int layer = 0
     cdef int length = 756
     cdef int* h
@@ -212,8 +215,8 @@ def equalize(image, mask=None):
                  the mask are included in the analysis.
     :return: An image.
     """
-    # if image.mode == "P":
-    #     image = image.convert("RGB")
+    if image.mode != "RGB":
+        image = image.convert("RGB")
     cdef int[:] h
     cdef int[:] lut = cvarray(shape=(768,), itemsize=sizeof(int), format="i")
 
@@ -266,7 +269,10 @@ def posterize(image, bits):
     :param image: The image to posterize.
     :param bits: The number of bits to keep for each channel (1-8).
     :return: An image.
-    """
+    """    
+    if image.mode != "RGB":
+        image = image.convert("RGB")
+
     cdef int[:] lut = cvarray(shape=(768,), itemsize=sizeof(int), format="i")
     cdef int i, b, c_bits
     cdef unsigned char mask
@@ -277,7 +283,8 @@ def posterize(image, bits):
     for b in range(0, 768, 256):
         for i in range(256):
             lut[b + i] = i & mask
-    return _c_lut(image, lut)
+    _c_lut(image, lut)
+    return image
 
 
 @cython.boundscheck(False)
@@ -334,9 +341,9 @@ def color(image, factor):
         for x in range(info.width):
             grey_val = L24(info.img_ptr[y][x]) >> 16
 
-            info.img_ptr[y][x].r = clip(info.img_ptr[y][x].r * c_factor + grey_val * (1 - c_factor))
-            info.img_ptr[y][x].g = clip(info.img_ptr[y][x].g * c_factor + grey_val * (1 - c_factor))
-            info.img_ptr[y][x].b = clip(info.img_ptr[y][x].b * c_factor + grey_val * (1 - c_factor))
+            info.img_ptr[y][x].r = <unsigned char>(info.img_ptr[y][x].r * c_factor + grey_val * (1 - c_factor))
+            info.img_ptr[y][x].g = <unsigned char>(info.img_ptr[y][x].g * c_factor + grey_val * (1 - c_factor))
+            info.img_ptr[y][x].b = <unsigned char>(info.img_ptr[y][x].b * c_factor + grey_val * (1 - c_factor))
 
     return image
 
@@ -363,9 +370,9 @@ def contrast(image, factor):
 
     for y in range(info.height):
         for x in range(info.width):
-            info.img_ptr[y][x].r = clip(info.img_ptr[y][x].r * c_factor + f_mean * (1 - c_factor))
-            info.img_ptr[y][x].g = clip(info.img_ptr[y][x].g * c_factor + f_mean * (1 - c_factor))
-            info.img_ptr[y][x].b = clip(info.img_ptr[y][x].b * c_factor + f_mean * (1 - c_factor))
+            info.img_ptr[y][x].r = <unsigned char>(info.img_ptr[y][x].r * c_factor + f_mean * (1 - c_factor))
+            info.img_ptr[y][x].g = <unsigned char>(info.img_ptr[y][x].g * c_factor + f_mean * (1 - c_factor))
+            info.img_ptr[y][x].b = <unsigned char>(info.img_ptr[y][x].b * c_factor + f_mean * (1 - c_factor))
 
     return image
 
@@ -384,9 +391,9 @@ def brightness(image, factor):
     zero_val = 0
     for y in range(info.height):
         for x in range(info.width):
-            info.img_ptr[y][x].r = clip(info.img_ptr[y][x].r * c_factor + zero_val * (1 - c_factor))
-            info.img_ptr[y][x].g = clip(info.img_ptr[y][x].g * c_factor + zero_val * (1 - c_factor))
-            info.img_ptr[y][x].b = clip(info.img_ptr[y][x].b * c_factor + zero_val * (1 - c_factor))
+            info.img_ptr[y][x].r = <unsigned char>(info.img_ptr[y][x].r * c_factor + zero_val * (1 - c_factor))
+            info.img_ptr[y][x].g = <unsigned char>(info.img_ptr[y][x].g * c_factor + zero_val * (1 - c_factor))
+            info.img_ptr[y][x].b = <unsigned char>(info.img_ptr[y][x].b * c_factor + zero_val * (1 - c_factor))
 
     return image
 
@@ -438,3 +445,42 @@ def to_numpy(image):
             np_img[y, x, 2] = info.img_ptr[y][x].b
 
     return np_img
+
+
+def rotate(img, angle):
+    image = np.asarray(img)
+    image_center = tuple(np.array(image.shape[1::-1]) / 2)
+    rot_mat = cv2.getRotationMatrix2D(image_center, angle, 1.0)
+    result = cv2.warpAffine(image, rot_mat, image.shape[1::-1], flags=cv2.INTER_NEAREST)
+    result = Image.fromarray(result)
+    return result
+
+
+def translate_x_rel(img, pct):
+    pixels = pct * img.width
+    image = np.asarray(img)
+    aff_mat = np.asarray((1, 0, -pixels, 0, 1, 1)).reshape([2, 3])
+    result = cv2.warpAffine(image, aff_mat, image.shape[1::-1], flags=cv2.INTER_LINEAR)
+    return Image.fromarray(result)
+
+
+def translate_y_rel(img, pct):
+    pixels = pct * img.height
+    image = np.asarray(img)
+    aff_mat = np.asarray((1, 0, 0, 0, 1, -pixels)).reshape([2, 3])
+    result = cv2.warpAffine(image, aff_mat, image.shape[1::-1], flags=cv2.INTER_LINEAR)
+    return Image.fromarray(result)
+
+
+def shear_x(img, factor):
+    image = np.asarray(img)
+    aff_mat = np.asarray((1, -factor, 0, 0, 1, 0)).reshape([2, 3])
+    result = cv2.warpAffine(image, aff_mat, image.shape[1::-1], flags=cv2.INTER_LINEAR)
+    return Image.fromarray(result)
+
+
+def shear_y(img, factor):
+    image = np.asarray(img)
+    aff_mat = np.asarray((1, 0, 0, -factor, 1, 0)).reshape([2, 3])
+    result = cv2.warpAffine(image, aff_mat, image.shape[1::-1], flags=cv2.INTER_LINEAR)
+    return Image.fromarray(result)
